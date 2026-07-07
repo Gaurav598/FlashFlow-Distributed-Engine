@@ -2,7 +2,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: api-gateway-hpa
-  namespace: e-com-ns
+  namespace: flashflow-ns
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -23,7 +23,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: auth-service-hpa
-  namespace: e-com-ns
+  namespace: flashflow-ns
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -44,7 +44,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: order-service-hpa
-  namespace: e-com-ns
+  namespace: flashflow-ns
 spec:
   scaleTargetRef:
     apiVersion: apps/v1
@@ -65,7 +65,7 @@ apiVersion: autoscaling/v2
 kind: HorizontalPodAutoscaler
 metadata:
   name: stock-service-hpa
-  namespace: e-com-ns
+  namespace: flashflow-ns
 spec:
   scaleTargetRef:
     apiVersion: apps/v1

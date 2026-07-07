@@ -33,3 +33,8 @@ coverage
 dist/
 build/
 out/
+
+# AI Agent Artifacts
+Analysis.md
+FutureUpgrades.md
+Verification_Report.md
