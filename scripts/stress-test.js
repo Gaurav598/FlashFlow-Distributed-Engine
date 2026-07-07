@@ -10,20 +10,19 @@ export const options = {
 };
 
 export default function () {
-//   const url = 'http://localhost/api/v1/auth/register';
-//   const url = 'http://localhost/api/v1/stock/current';
-  const url = 'http://localhost/api/v1/orders/create';
+//   const url = 'http://host.docker.internal:3000/api/v1/auth/register';
+//   const url = 'http://host.docker.internal:3000/api/v1/stock/current';
+  const url = 'http://host.docker.internal:3000/api/v1/orders/create';
   
-  const uniqueId = Date.now() + Math.random();
   const payload = JSON.stringify({
-    username: `user_${uniqueId}`,
-    email: `stress_${uniqueId}@test.com`,
-    password: "Password123!" // Password hashing spikes the CPU!
+    productId: "item:1",
+    quantity: 1
   });
 
   const params = {
     headers: {
       'Content-Type': 'application/json',
+      'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2YTRkMGY4NWMxMzQyY2Q0MjgzMTNmNTgiLCJlbWFpbCI6InRlc3RAdGVzdC5jb20iLCJ1c2VybmFtZSI6InRlc3R1c2VyIiwiaWF0IjoxNzgzNDM3NzE5LCJleHAiOjE3ODM1MjQxMTl9.oiXjICc4CrUsr-6M6rgxvmbX2ws3_m7adVdzbAZSjdw'
     },
   };
 

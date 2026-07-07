@@ -15,8 +15,8 @@ Registers a new user in MongoDB. Password is hashed with bcrypt (salt rounds: 10
 Verifies credentials against the stored hash and returns a JWT, set in a cookie.
 
 ### `POST /api/v1/auth/validate`
-Decodes the JWT and looks up the corresponding user via `User.findById`. Called internally by the Gateway on every protected request — **this DB lookup is the system's primary performance bottleneck** (see `01-Architecture-Analysis.md`).
-
+**[DEPRECATED]** Decodes the JWT and looks up the corresponding user via `User.findById`. 
+*Note: This endpoint is preserved strictly for backward compatibility with legacy internal jobs. As of ADR-05 Implementation, the API Gateway performs stateless signature validation locally. Do not use this endpoint for new integrations as it creates a database bottleneck.*
 ## Stock Service
 
 ### `POST /api/v1/stock/initialize`
