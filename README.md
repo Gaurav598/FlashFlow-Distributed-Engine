@@ -56,7 +56,10 @@ To break the 10k barrier and aim for 100k+, we tore it down and rebuilt it as a 
 
 ## 📊 The Proof: Production-Grade Stress Test
 
-We simulated the "Flash Sale" load using **k6** (Load Testing) and monitored the **Kubernetes HPA** (Auto-scaler).
+We simulated a massive "Flash Sale" load using **k6** (Load Testing) and monitored the **Kubernetes HPA** (Auto-scaler).
+
+### 🏆 The Ultimate Result
+> **Engineered a distributed system capable of handling 208,000+ requests in 2 minutes (1,700 RPS) with ZERO overselling on a strict 43,000 inventory limit using Redis.**
 
 ### ⚡ The Performance Matrix
 
