@@ -1,18 +1,51 @@
 import http from 'k6/http';
-import { sleep } from 'k6';
+import { sleep, check } from 'k6';
 
 export const options = {
-  stages: [
-    { duration: '30s', target: 20 }, 
-    { duration: '1m',  target: 100 },
-    { duration: '30s', target: 200 }, 
-  ],
+  scenarios: {
+    flash_sale: {
+      executor: 'shared-iterations',
+      vus: 200,
+      iterations: 223000,
+      maxDuration: '2m',
+    },
+  },
 };
 
-export default function () {
-//   const url = 'http://host.docker.internal:3000/api/v1/auth/register';
-//   const url = 'http://host.docker.internal:3000/api/v1/stock/current';
-  const url = 'http://host.docker.internal:3000/api/v1/orders/create';
+export function setup() {
+  const baseUrl = 'http://localhost:3000/api/v1';
+
+  // 1. Initialize Stock to 10000 for the stress test
+  http.post(`${baseUrl}/stock/initialize`, JSON.stringify({ quantity: 43000 }), {
+    headers: { 'Content-Type': 'application/json' },
+  });
+
+  // 2. Register a test user
+  const creds = JSON.stringify({
+    username: "k6_stress_user",
+    email: "k6_stress@test.com",
+    password: "password123"
+  });
+  
+  const params = { headers: { 'Content-Type': 'application/json' } };
+  http.post(`${baseUrl}/auth/register`, creds, params);
+
+  // 3. Login to get token
+  const loginRes = http.post(`${baseUrl}/auth/login`, creds, params);
+  
+  let token = "";
+  if (loginRes.status === 200) {
+      const body = JSON.parse(loginRes.body);
+      token = body.data.accessToken;
+  } else {
+      console.error("Login failed in setup phase!");
+  }
+  
+  return { token: token };
+}
+
+export default function (data) {
+  const url = 'http://localhost:3000/api/v1/orders/create';
   
   const payload = JSON.stringify({
     productId: "item:1",
@@ -22,10 +55,15 @@ export default function () {
   const params = {
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJfaWQiOiI2YTRkMGY4NWMxMzQyY2Q0MjgzMTNmNTgiLCJlbWFpbCI6InRlc3RAdGVzdC5jb20iLCJ1c2VybmFtZSI6InRlc3R1c2VyIiwiaWF0IjoxNzgzNDM3NzE5LCJleHAiOjE3ODM1MjQxMTl9.oiXjICc4CrUsr-6M6rgxvmbX2ws3_m7adVdzbAZSjdw'
+      'Authorization': `Bearer ${data.token}`,
+      'Cookie': `accessToken=${data.token}`
     },
   };
 
-  http.post(url, payload, params);
-  sleep(1);
+  const res = http.post(url, payload, params);
+  
+  // Verify that it either succeeded or correctly reported out of stock
+  check(res, {
+    'is status 201 (Ordered) or 400 (Out of stock)': (r) => r.status === 201 || r.status === 400,
+  });
 }
