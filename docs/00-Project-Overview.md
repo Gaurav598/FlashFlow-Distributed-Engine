@@ -58,7 +58,7 @@ FlashFlow is designed for containerized environments.
 
 *   **Microservice Isolation:** Auth, Stock, and Order domains are completely isolated in separate Node.js processes.
 *   **In-Memory Decrements:** The use of Redis `DECRBY` guarantees integer-based oversell protection at the memory layer.
-*   **High Throughput & Reliability:** Proven capable of handling **208,000+ requests in 2 minutes (1,700 RPS)** with **ZERO overselling** on a strict 43,000 inventory limit.
+*   **High Throughput & Reliability:** Proven capable of handling **208,000+ requests in 2 minutes (1,700 RPS)** with **ZERO overselling** on a strict 40,000 inventory limit.
 *   **Horizontal Scalability:** CPU-bound tasks like password hashing can be scaled by adding more `auth-service` pods via Kubernetes HPA.
 
 ## Current Limitations

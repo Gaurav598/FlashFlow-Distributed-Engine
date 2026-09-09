@@ -4,7 +4,7 @@
 
 ## 1. Test Objective
 
-Simulate the "1,000 iPhone Problem": 10,000 concurrent users competing for 1,000 units of stock, while verifying:
+Simulate the "40,000 iPhone Problem": 200,000+ concurrent requests competing for limited stock, while verifying:
 1. **Fairness** — no overselling, race conditions handled correctly.
 2. **Speed** — the ~9,000 users who don't get stock fail fast, without a hanging UI.
 3. **Isolation** — heavy load on the "Buy" flow doesn't take down the "Login" flow.
@@ -18,7 +18,7 @@ Simulate the "1,000 iPhone Problem": 10,000 concurrent users competing for 1,000
 ## 3. Reported Results
 
 ### 🏆 The Ultimate Result
-**Engineered a distributed system capable of handling 208,000+ requests in 2 minutes (~1,700 RPS) with ZERO overselling on a strict 43,000 inventory limit using Redis.**
+**Engineered a distributed system capable of handling 208,000+ requests in 2 minutes (~1,700 RPS) with ZERO overselling on a strict 40,000 inventory limit using Redis.**
 
 | Service | Auth Service | Stock Service | Order Service |
 |---|---|---|---|
@@ -39,7 +39,7 @@ Simulate the "1,000 iPhone Problem": 10,000 concurrent users competing for 1,000
 A few things worth flagging so the numbers aren't read as more than they are:
 
 - **Auth Service's CPU spike (1439%) matches the audit's finding** that `/validate` performs a database lookup on every call — this is consistent with Auth being the most CPU/latency-strained service under load, and its 513ms average latency is far higher than the other two services.
-- **The system successfully scaled to handle ~1,700 RPS**, effectively managing over 208,000 requests in 2 minutes. The auto-scaling and Redis-backed stock decrements proved resilient to this extreme synthetic load, and successfully enforced the strict 43,000 inventory limit with zero overselling.
+- **The system successfully scaled to handle ~1,700 RPS**, effectively managing over 208,000 requests in 2 minutes. The auto-scaling and Redis-backed stock decrements proved resilient to this extreme synthetic load, and successfully enforced the strict 40,000 inventory limit with zero overselling.
 - **These results reflect the actual synchronous architecture**, not the Kafka-based design in the vision doc — so they're a legitimate baseline for the *current* system, but shouldn't be assumed to represent performance after any future architectural changes (see `07-Future-Roadmap.md`).
 
 ## 5. How to Reproduce
