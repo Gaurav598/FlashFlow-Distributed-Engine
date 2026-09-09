@@ -48,13 +48,13 @@ This document records key architectural decisions — both the ones actually ref
 
 ---
 
-### ADR-05: JWT for Stateless Auth (intended) vs. DB-Backed Validation (actual)
+### ADR-05: JWT Stateless Auth at the Gateway
 
-**Decision (as implemented):** JWTs are issued for authentication, but `/validate` performs a full database lookup (`User.findById`) on every request.
+**Decision (as implemented in Step 1):** Validate the JWT signature statelessly at the API Gateway instead of querying the Auth Service database on every request. The Gateway decodes the JWT and injects internal trusted headers (`x-user-id`) for downstream services.
 
-**Why this is a problem:** This defeats the primary benefit of JWTs — avoiding a database round-trip per request — and is identified as the single largest bottleneck in the audit (1439% peak CPU, 513ms avg latency under test load).
+**Why:** The original implementation called `/validate` (which performed a `User.findById`) on every single API Gateway request. This defeated the primary benefit of JWTs and created a massive CPU/Database bottleneck (1439% peak CPU in Auth service during load testing).
 
-**Recommendation:** Validate the JWT signature only at the Gateway; reserve DB lookups for cases that genuinely require fresh user state (e.g., checking if an account was disabled), and do so far less frequently than "every request."
+**Result:** By pushing `jsonwebtoken` validation to the Gateway, we eliminated an internal HTTP network hop and a database query per request. The Auth Service `/validate` endpoint remains for backward compatibility but is deprecated. We only verify claims currently supported (`exp`, `algorithms: ["HS256"]`). Future security enhancements will introduce and verify `iss`, `aud`, and `nbf`.
 
 ---
 
