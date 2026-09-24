@@ -1,37 +1,23 @@
 import { AsyncHandler } from "../utils/async-handler.js";
 import { config } from "../config/config.js";
-import fetch from "node-fetch";
+import { serviceRequest } from "../utils/service-client.js";
 
 const registerProxy = AsyncHandler(async (req, res) => {
-  const response = await fetch(`${config.authServiceUrl}/register`, {
+  const response = await serviceRequest(`${config.authServiceUrl}/register`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(req.body),
+    body: req.body,
   });
-
-  const data = await response.json();
-  return res.status(response.status).json(data);
+  return res.status(response.status).json(response.data);
 });
 
 const loginProxy = AsyncHandler(async (req, res) => {
-  const response = await fetch(`${config.authServiceUrl}/login`, {
+  const response = await serviceRequest(`${config.authServiceUrl}/login`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify(req.body),
+    body: req.body,
   });
-
   const cookie = response.headers.get("set-cookie");
-
-  if (cookie) {
-    res.setHeader("Set-Cookie", cookie);
-  }
-
-  const data = await response.json();
-  return res.status(response.status).json(data);
+  if (cookie) res.setHeader("Set-Cookie", cookie);
+  return res.status(response.status).json(response.data);
 });
 
 export { registerProxy, loginProxy };

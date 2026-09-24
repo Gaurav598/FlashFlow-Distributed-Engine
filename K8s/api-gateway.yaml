@@ -5,6 +5,9 @@ metadata:
   namespace: flashflow-ns
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
   selector:
     matchLabels:
       app: api-gateway
@@ -13,11 +16,22 @@ spec:
       labels:
         app: api-gateway
     spec:
+      terminationGracePeriodSeconds: 15
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: api-gateway
           image: gaurav598/api-gateway:v1
           ports:
             - containerPort: 3000
+          env:
+            - { name: PORT, value: "3000" }
+            - { name: AUTH_SERVICE_URL, value: "http://auth-service:3001/api/v1/auth" }
+            - { name: STOCK_SERVICE_URL, value: "http://stock-service:3002/api/v1/stock" }
+            - { name: ORDER_SERVICE_URL, value: "http://order-service:3003/api/v1/orders" }
+            - { name: JWT_ISSUER, value: "flashflow-auth" }
+            - { name: JWT_AUDIENCE, value: "flashflow-api" }
           envFrom:
             - secretRef:
                 name: flashflow-secrets
@@ -25,6 +39,19 @@ spec:
             requests:
               cpu: 100m
               memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          readinessProbe:
+            httpGet: { path: /health/live, port: 3000 }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health/live, port: 3000 }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
 ---
 apiVersion: v1
 kind: Service

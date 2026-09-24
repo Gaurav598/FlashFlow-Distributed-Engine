@@ -1,5 +1,7 @@
 # 03 — Database Design
 
+> Historical pre-upgrade audit. The current MongoDB order intent, idempotency indexes, lease fencing, and recovery model are documented in the root `ARCHITECTURE.md` and `CONSISTENCY_AND_RECOVERY.md`.
+
 > **Note on scope:** The original vision doc (`Project.md`) specifies PostgreSQL as the system of record with optimistic/pessimistic locking and `CHECK` constraints. The **actual implementation uses MongoDB** via Mongoose, with no explicit locking strategy. This document describes the real, current design, with the PostgreSQL vision noted separately where relevant.
 
 ## 1. Current Implementation — MongoDB

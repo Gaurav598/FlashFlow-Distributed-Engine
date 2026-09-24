@@ -26,6 +26,11 @@ const userSchema = new Schema(
       type: String,
       required: [true, "Password is required"],
     },
+    role: {
+      type: String,
+      enum: ["user", "admin"],
+      default: "user",
+    },
   },
   { timestamps: true },
 );
@@ -42,13 +47,16 @@ userSchema.methods.isPasswordCorrect = async function (password) {
 userSchema.methods.generateAccessToken = function () {
   return jwt.sign(
     {
-      _id: this._id,
+      role: this.role,
       email: this.email,
       username: this.username,
     },
     process.env.ACCESS_TOKEN_SECRET,
     {
       expiresIn: process.env.ACCESS_TOKEN_EXPIRY,
+      subject: String(this._id),
+      issuer: process.env.JWT_ISSUER || "flashflow-auth",
+      audience: process.env.JWT_AUDIENCE || "flashflow-api",
     },
   );
 };

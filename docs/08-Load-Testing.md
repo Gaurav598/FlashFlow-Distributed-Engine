@@ -1,5 +1,7 @@
 # 08 — Load Testing
 
+> Historical, self-reported benchmark notes for the old implementation. They are not evidence for the current engine. See the root `PERFORMANCE_REPORT.md`.
+
 > Source: results reported in `README.md`. I have not independently verified these numbers — treat them as the project's self-reported test results and re-run the k6 scripts yourself if you need to confirm them for a report or presentation.
 
 ## 1. Test Objective

@@ -1,30 +1,54 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: StatefulSet
 metadata:
   name: redis
   namespace: flashflow-ns
 spec:
+  serviceName: redis
   replicas: 1
   selector:
-    matchLabels:
-      app: redis
+    matchLabels: { app: redis }
   template:
     metadata:
-      labels:
-        app: redis
+      labels: { app: redis }
     spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 999
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: redis
-          image: redis:alpine
-          ports:
-            - containerPort: 6379
+          image: redis:7.4-alpine
+          command: ["sh", "-c"]
+          args:
+            - exec redis-server --appendonly yes --appendfsync everysec --requirepass "$REDIS_PASSWORD"
+          env:
+            - name: REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: flashflow-secrets, key: REDIS_PASSWORD }
+          ports: [{ containerPort: 6379 }]
+          volumeMounts:
+            - { name: redis-data, mountPath: /data }
           resources:
-            requests:
-              cpu: 50m
-              memory: 64Mi
-            limits:
-              cpu: 250m
-              memory: 128Mi
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { cpu: 500m, memory: 512Mi }
+          readinessProbe:
+            exec: { command: ["sh", "-c", "redis-cli -a \"$REDIS_PASSWORD\" ping | grep PONG"] }
+            periodSeconds: 5
+          livenessProbe:
+            exec: { command: ["sh", "-c", "redis-cli -a \"$REDIS_PASSWORD\" ping | grep PONG"] }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+  volumeClaimTemplates:
+    - metadata: { name: redis-data }
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests: { storage: 1Gi }
 ---
 apiVersion: v1
 kind: Service
@@ -32,9 +56,6 @@ metadata:
   name: redis
   namespace: flashflow-ns
 spec:
-  selector:
-    app: redis
+  selector: { app: redis }
   ports:
-    - protocol: TCP
-      port: 6379
-      targetPort: 6379
+    - { protocol: TCP, port: 6379, targetPort: 6379 }

@@ -1,5 +1,7 @@
 # 05 — Kafka / Event-Driven Design
 
+> Historical design exploration. Kafka remains intentionally unimplemented; the current system uses the recoverable reservation saga documented in the root `ARCHITECTURE.md`.
+
 ## ⚠️ Status: Not Implemented
 
 This is the most important callout in the whole documentation set: **Kafka does not exist anywhere in the current FlashFlow codebase.** The original vision document (`Project.md`) describes an extensive Kafka-based event system, but the engineering audit confirms this was never built — the system is entirely synchronous HTTP today. This document exists so the *intended* design is captured accurately, clearly labeled as aspirational, for whoever picks up this work next.

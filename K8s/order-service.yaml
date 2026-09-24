@@ -5,6 +5,9 @@ metadata:
   namespace: flashflow-ns
 spec:
   replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxUnavailable: 0, maxSurge: 1 }
   selector:
     matchLabels:
       app: order-service
@@ -13,6 +16,10 @@ spec:
       labels:
         app: order-service
     spec:
+      terminationGracePeriodSeconds: 15
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: order-service
           image: gaurav598/order-service:v1
@@ -21,6 +28,8 @@ spec:
           env:
             - name: PORT
               value: "3003"
+            - { name: MONGO_URI, value: "mongodb://mongodb:27017/order_db" }
+            - { name: STOCK_SERVICE_URL, value: "http://stock-service:3002/api/v1/stock" }
           envFrom:
             - secretRef:
                 name: flashflow-secrets
@@ -28,6 +37,19 @@ spec:
             requests:
               cpu: 100m
               memory: 128Mi
+            limits:
+              cpu: 1000m
+              memory: 256Mi
+          readinessProbe:
+            httpGet: { path: /health/ready, port: 3003 }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health/live, port: 3003 }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
 ---
 apiVersion: v1
 kind: Service

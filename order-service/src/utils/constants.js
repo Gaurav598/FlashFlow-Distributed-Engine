@@ -1,7 +1,10 @@
 export const OrderStatusEnum = {
   PENDING: "pending",
+  RESERVED: "reserved",
   CONFIRMED: "confirmed",
-  FAILED: "failed",
+  REJECTED: "rejected",
+  CANCEL_PENDING: "cancel_pending",
+  CANCELLED: "cancelled",
 };
 
 export const AvailableOrderStatus = Object.values(OrderStatusEnum);

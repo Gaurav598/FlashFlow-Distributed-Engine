@@ -1,5 +1,7 @@
 # 10 — Architecture Decisions
 
+> Historical decision log from before the reservation saga. Current decisions and limitations are documented in the root `ARCHITECTURE.md` and `CONSISTENCY_AND_RECOVERY.md`.
+
 This document records key architectural decisions — both the ones actually reflected in the current codebase, and open decisions still to be made per the roadmap. Written in a lightweight ADR (Architecture Decision Record) style.
 
 ---

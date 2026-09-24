@@ -17,6 +17,8 @@ metadata:
   namespace: flashflow-ns
 spec:
   replicas: 1
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: mongodb
@@ -25,9 +27,14 @@ spec:
       labels:
         app: mongodb
     spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 999
+        seccompProfile: { type: RuntimeDefault }
       containers:
         - name: mongodb
-          image: mongo:latest
+          image: mongo:7.0
           ports:
             - containerPort: 27017
           volumeMounts:
@@ -40,6 +47,18 @@ spec:
             limits:
               cpu: 500m
               memory: 512Mi
+          readinessProbe:
+            exec:
+              command: ["mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: ["mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
       volumes:
         - name: mongodb-data
           persistentVolumeClaim:

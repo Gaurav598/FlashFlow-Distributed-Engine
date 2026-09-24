@@ -1,5 +1,7 @@
 # 02 — System Architecture
 
+> Historical pre-upgrade architecture. See the root `ARCHITECTURE.md` for the implemented Redis reservation saga and security boundaries.
+
 ## 1. Architecture Style
 
 FlashFlow's **actual, implemented** architecture is a **synchronous, HTTP-based microservices architecture** deployed on Kubernetes. It is *not* the event-driven architecture described in the original vision document — there is no message broker in the current codebase.

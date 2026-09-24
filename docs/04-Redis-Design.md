@@ -1,5 +1,7 @@
 # 04 — Redis Design
 
+> Historical description of the removed `DECRBY`/rollback implementation. The current code uses Lua reservation state transitions described in the root `ARCHITECTURE.md`.
+
 ## 1. Current Role of Redis
 
 Redis is used as the **primary datastore for the live inventory counter** — not as a cache in the traditional sense. It is the fast-path layer that absorbs the concurrency spike during a flash sale, sitting in front of MongoDB.

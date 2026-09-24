@@ -1,64 +1,94 @@
-# 06 — API Documentation
+# API reference
 
-> This reflects the endpoints confirmed present in the actual codebase (per the engineering audit), not the larger API surface sketched in the vision document. Endpoints like `/sales`, `/checkout`, `/cancel`, and `/analytics` appear in `Project.md` but were **not found** in the implementation.
+Base URL: `http://localhost:3000/api/v1`. All client traffic goes through the API gateway. JSON request bodies are limited to 16 KiB.
 
-## Base Path
+Responses use:
 
-All routes are versioned under `/api/v1/...` and pass through the API Gateway.
+```json
+{ "statusCode": 200, "data": {}, "message": "...", "success": true }
+```
 
-## Auth Service
+## Authentication
 
-### `POST /api/v1/auth/register`
-Registers a new user in MongoDB. Password is hashed with bcrypt (salt rounds: 10) via a Mongoose pre-save hook.
+### `POST /auth/register`
 
-### `POST /api/v1/auth/login`
-Verifies credentials against the stored hash and returns a JWT, set in a cookie.
+Body: `email`, `username`, and a password of at least 10 characters. The server always assigns role `user`; a caller cannot self-assign administrator privileges.
 
-### `POST /api/v1/auth/validate`
-**[DEPRECATED]** Decodes the JWT and looks up the corresponding user via `User.findById`. 
-*Note: This endpoint is preserved strictly for backward compatibility with legacy internal jobs. As of ADR-05 Implementation, the API Gateway performs stateless signature validation locally. Do not use this endpoint for new integrations as it creates a database bottleneck.*
-## Stock Service
+### `POST /auth/login`
 
-### `POST /api/v1/stock/initialize`
-Admin-only. Sets the stock count in Redis via `SET`. Operates against a single hardcoded key (`item:1:stock`) — does not support arbitrary product IDs.
+Body: `email`, `password`. Returns a JWT in `data.accessToken` and an HTTP-only cookie. Bearer tokens use `Authorization: Bearer <token>`.
 
-### `GET /api/v1/stock/current`
-Reads the live stock count from Redis via `GET`.
+## Inventory
 
-### `POST /api/v1/stock/reserve`
-Decrements stock via `DECRBY`. If the result goes negative, compensates with `INCRBY` and returns an "Out of Stock" error (see `04-Redis-Design.md` for why this two-step approach is not truly atomic).
+### `PUT /stock/products/:productId` — administrator
 
-## Order Service
+Creates or changes total product inventory.
 
-### `POST /api/v1/orders/create`
-Authenticated endpoint (JWT required, validated via the Gateway → Auth Service round trip). Calls Stock Service's `/reserve` synchronously, then creates the order document in MongoDB. **No distributed transaction** wraps these two steps — see the data-loss risk noted in `01-Architecture-Analysis.md` and `03-Database-Design.md`.
+```json
+{ "quantity": 100 }
+```
 
-### `GET /api/v1/orders` *(Planned Future Feature)*
-Retrieves a customer's order history. This endpoint is not currently implemented in the `order-service` routes.
+The quantity may be zero but cannot be below already reserved plus sold units. This endpoint cannot erase allocations.
 
-## API Gateway Behavior
+### `GET /stock/products/:productId` — authenticated
 
-- Acts as a **pass-through proxy** using `node-fetch` — the gateway controllers for auth/order/stock are simple forwarders, not custom business logic.
-- `auth.middleware.js` extracts the JWT from cookies/headers and calls Auth Service's `/validate` before forwarding any protected request.
-- No request timeout or circuit-breaker configuration was found around these proxy calls.
+Returns `initial`, `available`, `reserved`, and `sold` counters.
 
-## Confirmed Missing From the Vision Doc's API Surface
+### `POST /stock/products/:productId/reconcile` — administrator
 
-The following endpoints are described in `Project.md` but were **not found** in the codebase:
-- `POST /sales`, `GET /sales` (flash sale scheduling/listing)
-- `POST /checkout` (separate payment step)
-- `POST /cancel`
-- `GET /analytics`
-- `POST /products` (product catalog management)
+Rebuilds a missing Redis inventory key after data loss.
 
-If these are needed, they represent genuinely new endpoints to design and build, not gaps to "wire up" against existing internal logic.
+```json
+{ "totalQuantity": 100 }
+```
 
-## Error Handling
+The gateway obtains confirmed sold quantity from MongoDB; the client cannot override it. Reconciliation is rejected when the inventory key already exists.
 
-Centralized via a custom `ApiError` / `ApiResponse` utility pattern, used consistently across all four services (this is one of the codebase's stronger points per the audit — rated 8/10 for error-handling quality).
+## Orders
 
-## Authentication Notes
+### `POST /orders` — authenticated
 
-- JWTs are stored in cookies **without CSRF protection** — flagged as a security gap in the audit.
-- Input validation is basic string-checking in controllers; no schema-validation library (e.g., Joi/Zod) was found.
-- No rate limiting was found anywhere in the stack.
+Required header: `Idempotency-Key` (8–128 safe characters). Body:
+
+```json
+{ "productId": "phone-1", "quantity": 1 }
+```
+
+The key is scoped to the authenticated user. Reusing it with the same payload returns the same logical order. Reusing it with a different product or quantity returns `409`.
+
+Status meanings:
+
+- `201`: order reached `confirmed` during this request.
+- `202`: durable order is `pending`, `reserved`, or `cancel_pending`; poll its status.
+- `409`: terminal `rejected`/sold-out result.
+- `429`: admission limit reached; honor `Retry-After`.
+- `503`: a required service is unavailable before a durable response can be provided.
+
+`POST /orders/create` remains as a compatibility alias.
+
+### `GET /orders/:orderId` — authenticated owner
+
+Returns the authoritative state. Cross-user access returns `404`.
+
+### `GET /orders` — authenticated
+
+Returns up to the 100 most recent orders for the authenticated user.
+
+### `POST /orders/:orderId/cancel` — authenticated owner
+
+Cancellation is valid only before commit. Returns `200` when cancelled and `202` while cancellation is recoverable. If commit won the race, the order is confirmed and cancellation returns `409`.
+
+## Internal endpoints
+
+The stock reservation, confirmation, release, admission, and durable reconciliation-summary endpoints are not public API. They require the correct named service credential and are network-restricted in Kubernetes. Direct user identity headers are not accepted as authentication.
+
+## Order states
+
+| State | Meaning |
+|---|---|
+| `pending` | Durable intent exists; work will be retried |
+| `reserved` | Inventory hold was observed; confirmation is recoverable |
+| `cancel_pending` | Cancellation requested; transition is recoverable |
+| `confirmed` | Terminal; inventory is committed/sold |
+| `rejected` | Terminal; no inventory allocated |
+| `cancelled` | Terminal; reservation released or never created |

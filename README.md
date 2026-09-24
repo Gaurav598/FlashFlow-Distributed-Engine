@@ -1,111 +1,110 @@
-# FlashFlow – Distributed Flash Sale & Inventory Reservation Engine
+# FlashFlow
 
-A production-grade distributed flash sale and inventory reservation engine engineered to handle massive concurrent traffic while guaranteeing zero overselling using Redis atomic operations, asynchronous event processing, and scalable microservices.
+FlashFlow is a demonstrable flash-sale inventory engine built around atomic Redis reservations and a recoverable MongoDB order saga. It prioritizes inventory correctness and explicit failure states over headline throughput claims.
 
-## 🎯 The Challenge: "The 40,000 iPhone Problem"
+## What is implemented
 
-The mission was specific and brutal:
+- Per-product inventory with `initial = available + reserved + sold` accounting.
+- Atomic Lua transitions for reserve, confirm, release, and expiry.
+- Reservation states `RESERVED`, `COMMITTED`, `RELEASED`, and `EXPIRED`.
+- MongoDB order intent persisted before inventory is touched.
+- User-scoped idempotency backed by a MongoDB unique index and Redis keys.
+- Lease-based order recovery with unique fencing tokens and Redis-enforced deadlines.
+- Bounded, Redis-backed admission control before order creation.
+- Stateless JWT verification at the gateway with administrator-only inventory management.
+- Separate gateway and order-service credentials, internal-only service ports, and Kubernetes network policies.
+- Redis AOF persistence plus an administrator-controlled reconciliation path after Redis data loss.
 
-**Handle 200,000+ concurrent requests competing for only 40,000 stock items (e.g., iPhones) during a Flash Sale.**
+Kafka is intentionally not used. The current reservation saga is sufficient for this codebase and avoids adding a broker whose operational cost has not been justified by measurements. The system does not claim strict global request fairness, unlimited scaling, or an independently verified production throughput.
 
-The system needed to guarantee three things:
+## Request path
 
-1. **Fairness:** No overselling. First come, first served. Race conditions must be handled atomically.
-2. **Speed:** Most users will fail to buy, but they must fail fast (low latency). They cannot see a loading spinner.
-3. **Uptime:** The high traffic on the "Buy" button must not crash the "Login" page.
-
----
-
-## 🏛️ Phase 1: The Monolith Trap
-
-Our first attempt was a standard **Monolithic Architecture**. All logic (Auth, Order, Stock) lived in one Node.js process.
-
-### The Architecture
-
-![Monolith Architecture](Monolith%20Architecture.png)
-
-### 💥 Why It Failed the "10k Test"
-
-- **The "Auth Choke":** When 10,000 users tried to login at 10:00 AM, the CPU hit 100% just hashing passwords. This choked the Stock Check, causing the "Buy" button to freeze for users who were already logged in.
-
-- **The "One-Kill-All" Bug:** A single memory leak in the Order processing crashed the entire server, taking down the Storefront and Inventory with it.
-
-- **Scale Limits:** We could handle ~2,000 users. Beyond that, vertical scaling (bigger RAM) became too expensive and inefficient.
-
----
-
-## ☁️ Phase 2: The Microservices Re-Architecture
-
-To break the 10k barrier and aim for 100k+, we tore it down and rebuilt it as a **Distributed System on Kubernetes**.
-
-### The New Architecture
-
-![Microservice Architecture](Microservice%20Architecture.png)
-
-### 🛡️ System Design Flex (The Solutions)
-
-1. **Concurrency & Fairness:** We implemented **Optimistic Locking** at the Database layer. Even if 100 users click "Buy" at the exact same millisecond, the database processes them sequentially. No overselling.
-
-2. **Architectural Isolation:**
-   - **Scenario:** Auth Service is getting hammered (DDoS or Flash Crowd).
-   - **Outcome:** The `auth-service` pods scale up to 100% CPU. BUT, the `order-service` runs on separate pods. Users already inside the app experience **Zero Lag** while checking out.
-
-3. **Infinite Scaling:** While the target was 10k, this architecture can theoretically handle 100k or 1M users simply by increasing the `maxReplicas` in the HPA configuration.
-
----
-
-## 📊 The Proof: Production-Grade Stress Test
-
-We simulated a massive "Flash Sale" load using **k6** (Load Testing) and monitored the **Kubernetes HPA** (Auto-scaler).
-
-### 🏆 The Ultimate Result
-> **Engineered a distributed system capable of handling 208,000+ requests in 2 minutes (1,700 RPS) with ZERO overselling on a strict 40,000 inventory limit using Redis.**
-
-### ⚡ The Performance Matrix
-
-| Service | 🔐 Auth Service | 📦 Stock Service | 🛒 Order Service |
-|---------|----------------|------------------|------------------|
-| **Role** | The Gatekeeper | The Fast Reader | The Transaction Manager |
-| **Test Scenario** | Extreme Load (1,700 RPS) | Extreme Load (1,700 RPS) | Extreme Load (1,700 RPS) |
-| **Workload Type** | CPU Bound (bcrypt hashing) | I/O Bound (Fast DB Reads) | Network Bound (Internal API calls) |
-| **Peak CPU Load** | Auto-scaled successfully | Auto-scaled successfully | Auto-scaled successfully |
-| **Throughput** | ~1,700 Req/Sec (Combined) | ~1,700 Req/Sec (Combined) | ~1,700 Req/Sec (Combined) |
-| **Latency (Avg)** | Maintained under load | 10 ms (Instant) ⚡ | Maintained under load |
-| **Scaling Action** | Scaled across K8s Pods | Scaled across K8s Pods | Scaled across K8s Pods |
-| **Verdict** | ✅ SURVIVED (208k+ Reqs) | ✅ SURVIVED (Zero Oversell) | ✅ SURVIVED (40k Orders) |
-
-> **Engineer's Note:** The system demonstrated **Dependency Propagation Resilience**. When `Order Service` was stressed, it naturally stressed the `Stock Service`. Both auto-scaled in tandem without human intervention, maintaining 100% uptime.
-
----
-
-## 🛠️ Tech Stack
-
-- **Core:** Node.js, Express.js (Microservices)
-- **Orchestration:** Kubernetes (K8s), Docker
-- **Gateway:** Nginx Ingress Controller, Custom Node.js Gateway
-- **Data Layer:** MongoDB (Per-Service DB), Redis (Caching)
-- **Testing:** k6 (Performance), Postman (API)
-- **Observability:** Kubernetes Metrics Server
-
----
-
-## 🚀 How to Run the System
-
-1. **Deploy Infrastructure:**
-```bash
-   kubectl apply -f K8s/
+```text
+client -> API gateway -> Redis admission control -> order service
+                                                -> MongoDB order intent
+                                                -> stock service / Redis reservation
+                                                -> Redis commit
+                                                -> MongoDB confirmed order
 ```
 
-2. **Simulate Traffic:**
+If a downstream response is lost, the order remains recoverable. The order worker retries with the same order ID, reservation ID, user ID, and idempotency key. See [ARCHITECTURE.md](ARCHITECTURE.md) and [CONSISTENCY_AND_RECOVERY.md](CONSISTENCY_AND_RECOVERY.md).
+
+## Local demo
+
+Requirements: Docker Compose.
+
 ```bash
-   k6 run scripts/stress-test.js
+cp .env.example .env
+# Change the sample secrets and bootstrap administrator password.
+docker compose up --build
 ```
 
-3. **Monitor Scaling:**
+Only the gateway is published on `localhost:3000`. MongoDB, Redis, and internal services stay on the Compose network.
+
+Log in as the bootstrap administrator and initialize a product:
+
 ```bash
-   kubectl get hpa -w
+ADMIN_TOKEN=$(curl -sS http://localhost:3000/api/v1/auth/login \
+  -H 'content-type: application/json' \
+  -d '{"email":"admin@flashflow.local","password":"change-this-admin-password"}' \
+  | node -pe 'JSON.parse(require("fs").readFileSync(0)).data.accessToken')
+
+curl -sS -X PUT http://localhost:3000/api/v1/stock/products/phone-1 \
+  -H "authorization: Bearer $ADMIN_TOKEN" \
+  -H 'content-type: application/json' \
+  -d '{"quantity":10}'
 ```
 
----
+Register/login a customer, then purchase with a unique idempotency key:
 
-**Architected & Engineered by Gaurav**
+```bash
+curl -sS -X POST http://localhost:3000/api/v1/auth/register \
+  -H 'content-type: application/json' \
+  -d '{"username":"buyer1","email":"buyer1@example.com","password":"correct-horse-battery"}'
+
+USER_TOKEN=$(curl -sS http://localhost:3000/api/v1/auth/login \
+  -H 'content-type: application/json' \
+  -d '{"email":"buyer1@example.com","password":"correct-horse-battery"}' \
+  | node -pe 'JSON.parse(require("fs").readFileSync(0)).data.accessToken')
+
+curl -sS -X POST http://localhost:3000/api/v1/orders \
+  -H "authorization: Bearer $USER_TOKEN" \
+  -H 'content-type: application/json' \
+  -H 'idempotency-key: demo-order-0001' \
+  -d '{"productId":"phone-1","quantity":1}'
+```
+
+The response is `201` when confirmed, `202` while recoverable work is pending, `409` for a terminal rejection/sold-out result, or `429` when admission control rejects the request. Retrieve the authoritative status with `GET /api/v1/orders/:orderId`.
+
+## Tests
+
+```bash
+cd stock-service && npm ci && npm test
+```
+
+The stock suite launches a real temporary Redis server and includes 100-for-10, 1,000-for-100, multi-product, duplicate, invalid-quantity, expiry, fencing, repeated-transition, and race cases. Full-stack validation requires Docker; see [TEST_REPORT.md](TEST_REPORT.md).
+
+## Kubernetes
+
+Create secrets locally rather than committing them:
+
+```bash
+cp K8s/secrets.example.env K8s/secrets.env
+# Replace every value.
+kubectl apply -f K8s/namespace.yaml
+kubectl -n flashflow-ns create secret generic flashflow-secrets \
+  --from-env-file=K8s/secrets.env
+kubectl apply -f K8s/
+```
+
+The ingress routes only to the gateway. Configure a real hostname and TLS secret before exposing it publicly. The checked-in manifests are a baseline, not a high-availability production database design.
+
+## Documentation
+
+- [Architecture](ARCHITECTURE.md)
+- [Consistency and recovery](CONSISTENCY_AND_RECOVERY.md)
+- [Security review](SECURITY_REVIEW.md)
+- [API reference](docs/06-API-Documentation.md)
+- [Test report](TEST_REPORT.md)
+- [Performance report](PERFORMANCE_REPORT.md)
+- [Changelog](CHANGELOG.md)

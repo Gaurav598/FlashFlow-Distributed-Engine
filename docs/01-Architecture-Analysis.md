@@ -1,5 +1,7 @@
 # 01 — Architecture Analysis
 
+> Historical audit of the implementation before the reservation-engine upgrade. Findings below explain the original defects; they are not the current-state architecture.
+
 > **Scope of this document:** This is a factual audit of the FlashFlow codebase as it actually exists, based on the engineering analysis report. It intentionally separates **what is built** from **what is documented/aspirational** in `Project.md`, since there is a significant gap between the two.
 
 ---

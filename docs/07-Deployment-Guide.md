@@ -1,5 +1,7 @@
 # 08 — Deployment Guide
 
+> Historical deployment notes. Use the root `README.md` for current Compose and Kubernetes secret/setup instructions.
+
 ## 1. Prerequisites
 
 - Docker

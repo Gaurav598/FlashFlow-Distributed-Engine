@@ -1,87 +1,114 @@
-version: "3.8"
-
 services:
   mongodb:
     image: mongo:7.0
-    container_name: dfs-mongo
-    ports:
-      - "27018:27017"
     volumes:
       - mongo_data:/data/db
-    networks:
-      - flash-sale-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [flash-sale-net]
 
   redis:
-    image: redis:alpine
-    container_name: dfs-redis
-    ports:
-      - "6379:6379"
+    image: redis:7.4-alpine
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--requirepass", "${REDIS_PASSWORD}"]
     volumes:
       - redis_data:/data
-    networks:
-      - flash-sale-net
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 3s
+      timeout: 2s
+      retries: 20
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    networks: [flash-sale-net]
 
   api-gateway:
     build: ./api-gateway
-    container_name: dfs-gateway
     ports:
       - "3000:3000"
     environment:
-      - PORT=3000
-      - AUTH_SERVICE_URL=http://auth-service:3001/api/v1/auth
-      - STOCK_SERVICE_URL=http://stock-service:3002/api/v1/stock
-      - ORDER_SERVICE_URL=http://order-service:3003/api/v1/orders
-      - ACCESS_TOKEN_SECRET=${ACCESS_TOKEN_SECRET}
-      - ACCESS_TOKEN_EXPIRY=${ACCESS_TOKEN_EXPIRY}
+      PORT: 3000
+      AUTH_SERVICE_URL: http://auth-service:3001/api/v1/auth
+      STOCK_SERVICE_URL: http://stock-service:3002/api/v1/stock
+      ORDER_SERVICE_URL: http://order-service:3003/api/v1/orders
+      ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET}
+      GATEWAY_SERVICE_SECRET: ${GATEWAY_SERVICE_SECRET}
+      JWT_ISSUER: flashflow-auth
+      JWT_AUDIENCE: flashflow-api
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
     depends_on:
-      - auth-service
-      - stock-service
-      - order-service
-    networks:
-      - flash-sale-net
+      auth-service: { condition: service_healthy }
+      stock-service: { condition: service_healthy }
+      order-service: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3000/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [flash-sale-net]
 
   auth-service:
     build: ./auth-service
-    container_name: dfs-auth
-    ports:
-      - "3001:3001"
     environment:
-      - PORT=3001
-      - MONGO_URI=mongodb://mongodb:27017/auth_db
-      - ACCESS_TOKEN_SECRET=${ACCESS_TOKEN_SECRET}
-      - ACCESS_TOKEN_EXPIRY=${ACCESS_TOKEN_EXPIRY}
+      PORT: 3001
+      MONGO_URI: mongodb://mongodb:27017/auth_db
+      ACCESS_TOKEN_SECRET: ${ACCESS_TOKEN_SECRET}
+      ACCESS_TOKEN_EXPIRY: ${ACCESS_TOKEN_EXPIRY:-1h}
+      GATEWAY_SERVICE_SECRET: ${GATEWAY_SERVICE_SECRET}
+      JWT_ISSUER: flashflow-auth
+      JWT_AUDIENCE: flashflow-api
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_USERNAME: ${BOOTSTRAP_ADMIN_USERNAME:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
     depends_on:
-      - mongodb
-    networks:
-      - flash-sale-net
+      mongodb: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3001/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [flash-sale-net]
 
   stock-service:
     build: ./stock-service
-    container_name: dfs-stock
-    ports:
-      - "3002:3002"
     environment:
-      - PORT=3002
-      - REDIS_HOST=redis
-      - REDIS_PORT=6379
+      PORT: 3002
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      GATEWAY_SERVICE_SECRET: ${GATEWAY_SERVICE_SECRET}
+      ORDER_SERVICE_SECRET: ${ORDER_SERVICE_SECRET}
+      RESERVATION_TTL_MS: ${RESERVATION_TTL_MS:-120000}
+      ADMISSION_GLOBAL_LIMIT: ${ADMISSION_GLOBAL_LIMIT:-500}
+      ADMISSION_USER_LIMIT: ${ADMISSION_USER_LIMIT:-10}
     depends_on:
-      - redis
-    networks:
-      - flash-sale-net
+      redis: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3002/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [flash-sale-net]
 
   order-service:
     build: ./order-service
-    container_name: dfs-order
-    ports:
-      - "3003:3003"
     environment:
-      - PORT=3003
-      - MONGO_URI=mongodb://mongodb:27017/order_db
-      - STOCK_SERVICE_URL=http://stock-service:3002/api/v1/stock
+      PORT: 3003
+      MONGO_URI: mongodb://mongodb:27017/order_db
+      STOCK_SERVICE_URL: http://stock-service:3002/api/v1/stock
+      GATEWAY_SERVICE_SECRET: ${GATEWAY_SERVICE_SECRET}
+      ORDER_SERVICE_SECRET: ${ORDER_SERVICE_SECRET}
     depends_on:
-      - mongodb
-    networks:
-      - flash-sale-net
+      mongodb: { condition: service_healthy }
+      stock-service: { condition: service_healthy }
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:3003/health/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [flash-sale-net]
 
 networks:
   flash-sale-net:

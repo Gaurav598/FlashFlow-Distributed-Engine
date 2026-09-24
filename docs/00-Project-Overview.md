@@ -1,5 +1,7 @@
 # FlashFlow – Distributed Flash Sale & Inventory Reservation Engine
 
+> Historical pre-upgrade overview. It does not describe the current reservation saga. Use the root `ARCHITECTURE.md` and `CONSISTENCY_AND_RECOVERY.md` as authoritative documentation.
+
 ## Project Overview
 
 FlashFlow is a distributed, microservices-based backend system designed to handle flash sales and inventory reservations. During high-demand flash sales, concurrent purchase requests vastly exceed available stock. FlashFlow decouples core services and utilizes an in-memory datastore for rapid inventory decrements to prevent overselling and improve system resilience.
